@@ -1,6 +1,6 @@
 # DUN
  
-Pan-sharpening via Intrinsic Decomposition Knowledge
+Rethinking the Role of Panchromatic Images in Pan-sharpening
 
 If you find this work useful, please consider citing it.
 ```
