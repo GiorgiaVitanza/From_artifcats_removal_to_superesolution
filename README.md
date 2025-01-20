@@ -14,7 +14,8 @@
 ## Super-resolution
 |Model |Published |
 |:-----|:---------|
-|(LDUM) A Deep Unfolding Method for Satellite Super Resolution | [TCI 2022](https://github.com/jiaming-wang/Project/tree/main/SR/ARSGN)|
+|(LLE) Deep Locally Linear Embedding Network| [IS 2022](https://github.com/jiaming-wang/Project/tree/main/SR/LLE)|
+|(LDUM) A Deep Unfolding Method for Satellite Super Resolution | [TCI 2022](https://github.com/jiaming-wang/Project/tree/main/SR/LDUM)|
 |(AGSRN) From Artifact Removal to Super-Resolution| [TGRS 2022](https://github.com/jiaming-wang/Project/tree/main/SR/ARSGN)|
 |(EIP) Enhanced Image Prior for Unsupervised Remoting Sensing Super-Resolution | [NN 2021](https://github.com/jiaming-wang/Project/tree/main/SR/EIP)|
 |(MIP) Unsupervised Remoting Sensing Super-Resolution Via Migration Image Prior| [ICME 2021](https://github.com/jiaming-wang/Project/tree/main/SR/EIP)|
