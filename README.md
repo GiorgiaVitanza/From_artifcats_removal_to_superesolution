@@ -4,6 +4,8 @@
 ## Pan-sharpening 
 |Model |Published |
 |:-----|:---------|
+|(YsNet) From Forgotten to Pan-sharpening| [--](https://github.com/jiaming-wang/Project/tree/main/PS/YsNet)|
+|(DLVC) Pan-sharpening via Dual Latent Variable Constraint Network| [IF 2025](https://github.com/jiaming-wang/Project/tree/main/PS/DLVC)|
 |(DUN) Rethinking the Role of Panchromatic Images in Pan-sharpening| [TMM 2025](https://github.com/jiaming-wang/Project/tree/main/PS/DUN)|
 |(DERN) A deep error removal network for pan-sharpening| [GRSL 2024](https://github.com/jiaming-wang/Project/tree/main/PS/DERN)|
 |(PSCINN) Pan-sharpening via conditional invertible neural network| [IF 2024](https://github.com/jiaming-wang/Project/tree/main/PS/PSCINN)|
