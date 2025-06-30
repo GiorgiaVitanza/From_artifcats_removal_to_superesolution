@@ -3,7 +3,7 @@
 ## HSI-MSI Fusion
 |Model |Published |
 |:-----|:---------|
-|(--) Hyperspectral and Multispectral Image Fusion via Deep Generalized Linear Mixed Model| [--]|
+|Hyperspectral and Multispectral Image Fusion via Deep Generalized Linear Mixed Model| --|
 
 ## Pan-sharpening 
 |Model |Published |
