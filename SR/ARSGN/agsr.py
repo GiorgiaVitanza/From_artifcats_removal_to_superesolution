@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
-from model import common
-# import common
+# from . import common
+import common
 from torch.autograd import Variable
 # from model.common
 
