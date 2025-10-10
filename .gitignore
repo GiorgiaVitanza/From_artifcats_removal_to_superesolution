@@ -2,3 +2,8 @@
 .vscode
 /Dati_UCMerced_LandUse
 /SR/EIP/dataset
+desktop.ini
+__pycache__
+*.pyc
+*.pyo
+*.pyd
