@@ -15,7 +15,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='N_SR')
     parser.add_argument('--option_path', type=str, default='option.yml')
     opt = parser.parse_args()
-    cfg = get_config(opt.option_path)
+    #cfg = get_config(opt.option_path)
+    cfg = get_config("SR\EIP\option.yml")
     for i in range(2,3):
         solver = Solver(cfg, i)
         solver.run()

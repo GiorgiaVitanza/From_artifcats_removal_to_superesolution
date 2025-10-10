@@ -140,7 +140,10 @@ class CycleLoss(nn.Module):
             raise ValueError
 
     def forward(self, x_sr, x_lr):
-        downsampler = Downsampler(n_planes=3, factor=4, phase=0.5, preserve_size=True).cuda(0)
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        downsampler = Downsampler(n_planes=3, factor=4, phase=0.5, preserve_size=True).to(device)
+
+        #downsampler = Downsampler(n_planes=3, factor=4, phase=0.5, preserve_size=True).cuda(0)
         down_x = downsampler(x_sr)
 
         # down_x = F.interpolate(x_hr, scale_factor=self.scale, mode='bicubic')

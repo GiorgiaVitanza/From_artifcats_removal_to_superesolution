@@ -19,6 +19,7 @@ def is_image_file(filename):
 
 
 def load_img(filepath):
+    filepath = filepath.replace('\\', '/')
     img = Image.open(filepath).convert('RGB')
     #img = Image.open(filepath)
     #y, _, _ = img.split()
@@ -118,7 +119,6 @@ class Data(data.Dataset):
         self.normalize = normalize
 
     def __getitem__(self, index):
-        
         target = load_img(self.image_filenames[index])
         _, file = os.path.split(self.image_filenames[index])
         target = target.crop((0, 0, target.size[0] // self.upscale_factor * self.upscale_factor, target.size[1] // self.upscale_factor * self.upscale_factor))
