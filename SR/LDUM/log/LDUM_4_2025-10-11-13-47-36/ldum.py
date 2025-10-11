@@ -174,29 +174,13 @@ class unfolding_block(nn.Module):
         self.up = Conv_up(3, 4)
         self.down = Conv_down(3, 4)
 
-    """ def candy_f(self, im):
+    def candy_f(self, im):
         sobel_kernel = np.array([[-1, -1, -1], [-1, 8, -1], [-1, -1, -1]], dtype='float32') 
         sobel_kernel = sobel_kernel.reshape((1, 3, 3, 3))
         weight = Variable(torch.from_numpy(sobel_kernel))
         edge_detect = F.conv2d(Variable(im.cpu()), weight, padding=1)
         #edge_detect = edge_detect.squeeze().detach().numpy()
-        return edge_detect.cuda() """
-    def candy_f(self, im):
-        # Kernel Laplaciano 3x3
-        sobel_kernel = np.array(
-            [[-1, -1, -1],
-            [-1,  8, -1],
-            [-1, -1, -1]], dtype='float32'
-        )
-        
-        # Replica del kernel per 3 canali RGB
-        sobel_kernel = np.stack([sobel_kernel] * 3, axis=0)  # (3, 3, 3)
-        sobel_kernel = sobel_kernel.reshape((1, 3, 3, 3))     # (out_c, in_c, k_h, k_w)
-        
-        weight = torch.from_numpy(sobel_kernel)
-        edge_detect = F.conv2d(im.cpu(), weight, padding=1)
-        
-        return edge_detect.to(im.device)  # return edge_detect.cuda()
+        return edge_detect.cuda()
 
     def lap_f(self, img):
         a = np.array([[1, 0, -1], [2, 0, -2], [1, 0, -1]])

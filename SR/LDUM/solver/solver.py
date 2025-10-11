@@ -50,8 +50,13 @@ class Solver(BaseSolver):
         self.milestones = list(map(lambda x: int(x), self.cfg['schedule']['decay'].split('-')))
         self.scheduler = lr_scheduler.MultiStepLR(self.optimizer, self.milestones, gamma=self.cfg['schedule']['gamma'], last_epoch=-1)
         self.loss = make_loss(self.cfg['schedule']['loss'])
+        
+        from datetime import datetime
 
-        self.log_name = self.cfg['algorithm'] + '_' + str(self.cfg['data']['upsacle']) + '_' + str(self.timestamp)
+        self.timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+        self.log_name = f"{self.cfg['algorithm']}_{self.cfg['data']['upsacle']}_{self.timestamp}"
+
+        #self.log_name = self.cfg['algorithm'] + '_' + str(self.cfg['data']['upsacle']) + '_' + str(self.timestamp)
         # save log
         self.writer = SummaryWriter('log/' + str(self.log_name))
         # if not self.cfg['algorithm'] == 'SMSR':

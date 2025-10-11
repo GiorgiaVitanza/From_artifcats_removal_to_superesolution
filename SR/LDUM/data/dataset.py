@@ -20,6 +20,7 @@ def is_image_file(filename):
     return any(filename.endswith(extension) for extension in ['.jpg', '.JPG', '.jpeg', '.JPEG', '.png', '.PNG', '.ppm', '.PPM', '.bmp', '.BMP',])
 
 def load_img(filepath):
+    filepath = filepath.replace('\\', '/')
     img = Image.open(filepath).convert('RGB')
     return img
 

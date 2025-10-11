@@ -196,7 +196,7 @@ class unfolding_block(nn.Module):
         weight = torch.from_numpy(sobel_kernel)
         edge_detect = F.conv2d(im.cpu(), weight, padding=1)
         
-        return edge_detect.to(im.device)  # return edge_detect.cuda()
+        return edge_detect.cuda()
 
     def lap_f(self, img):
         a = np.array([[1, 0, -1], [2, 0, -2], [1, 0, -1]])

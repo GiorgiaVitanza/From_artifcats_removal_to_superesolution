@@ -83,9 +83,29 @@ def save_net_config(time, log):
     log_file = open(get_path('./log/' + str(time) + '/net.txt'), open_type)
     log_file.write(str(log) + '\n')
 
-def save_net_py(time, py):
-    py_path = os.path.join('./model', py+'.py')
+""" def save_net_py(time, py):
+    py_path = './model/' + py + '.py'
+    #py_path = os.path.join('./model', py+'.py')
     shutil.copyfile(py_path, os.path.join('./log/'+ str(time), py+'.py'))
+
+import os
+import shutil """
+
+def save_net_py(time, py):
+    # Percorso assoluto della directory corrente del file utils.py
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # Percorso assoluto del file sorgente del modello
+    py_path = os.path.join(base_dir, '..', 'model', py + '.py')
+    py_path = os.path.abspath(py_path)
+
+    # Percorso di destinazione
+    log_dir = os.path.join(base_dir, '..', 'log', str(time))
+    os.makedirs(log_dir, exist_ok=True)
+
+    # Copia effettiva del file
+    shutil.copyfile(py_path, os.path.join(log_dir, py + '.py'))
+
     
 def draw_curve_and_save(x, y, title, filename, precision):
     if not isinstance(x, np.ndarray):
