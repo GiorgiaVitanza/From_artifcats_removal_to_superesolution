@@ -10,3 +10,8 @@ __pycache__
 /SR/LDUM/dataset
 desktop.ini
 /SR/ARSGN/datasets
+/results/desktop.ini
+/SR/ARSGN/datasets/test/desktop.ini
+/SR/ARSGN/datasets/desktop.ini
+/SR/ARSGN/desktop.ini
+*.ini
