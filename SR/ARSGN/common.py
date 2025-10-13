@@ -141,14 +141,14 @@ class Conv2d_Ada_Cross(nn.Module):
         # print(c.shape)
         for i in range((c.size()[0])):
             c[i, b[i,:]] = 1
-        out = c.cuda() * input_r1
+        out = c * input_r1
         out = out.view(input.size()[0]*input.size()[1],3,3)
         return out
 
     def forward(self, x):
         
         [C_out,C_in,H_k,W_k] = self.conv.weight.shape
-        tensor_zeros = torch.FloatTensor(C_out, C_in, 1).fill_(0).cuda()
+        tensor_zeros = torch.FloatTensor(C_out, C_in, 1).fill_(0)
         conv_weight = torch.cat((self.conv.weight[:,:,:,0], self.conv.weight[:,:,:,1], self.conv.weight[:,:,:,2], self.conv.weight[:,:,:,3], self.conv.weight[:,:,:,4], self.conv.weight[:,:,:,5], self.conv.weight[:,:,:,6], self.conv.weight[:,:,:,7], self.conv.weight[:,:,:,8]), 2)
         conv_weight = conv_weight.contiguous().view(C_out, C_in, 3, 3)
         index = self.top_k(conv_weight)
