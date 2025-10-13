@@ -4,7 +4,7 @@ from torchvision import transforms
 import numpy as np
 # Assumiamo che la classe Net e i moduli 'common' siano importabili
 from agsr import Net
-# (Devi caricare anche i moduli del codice precedente, come default_conv, ecc.)
+from common import *
 
 # Funzione per caricare e pre-elaborare l'immagine
 def load_image(image_path):
