@@ -1,166 +1,151 @@
+import os
 import torch
 import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader
-# Le seguenti importazioni sono placeholder.
-# Assicurati che i file 'model.py' (con la classe ARSGN) e 'dataset.py'
-# (con la classe SRDataset) siano presenti nella cartella ARSGN.
-from agsr import *# <<<<<< AGGIORNATO: ARSGN
-from common import *
-from dataset import SRDataset
+from torch.optim.lr_scheduler import StepLR
+import numpy as np
 
-# ... (all'inizio di train.py) ...
-# Importa il modulo 'collections'
-import collections 
+# Importa i moduli del tuo progetto (Assumi che 'models' e 'utils' siano nella stessa directory)
+import config
+from models.agsr import Net 
+from utils.dataset import get_dataloaders 
 
-# --- Aggiungi una classe/oggetto per simulare gli argomenti di configurazione ---
-# (Sostituisci i valori con quelli effettivi richiesti dal tuo modello Net)
-class Config:
-    def __init__(self):
-        # Questi sono solo ESEMPI. Devi trovare i valori corretti in model.py o nel codice originale.
-        self.scale = 4           # Esempio: Fattore di Super-Risoluzione (2, 3, 4, ecc.)
-        self.n_colors = 3        # Esempio: Numero di canali (3 per RGB)
-        self.n_feats = 64        # Esempio: Numero di feature maps intermedie
-        self.n_resblocks = 16    # Esempio: Numero di blocchi residui
-        # Aggiungi qui qualsiasi altro parametro richiesto da Net.__init__(self, args)
+# --- CONFIGURAZIONE DELLA PERDITA ---
+# La perdita totale sarà una combinazione dell'output dello Stage 1 (sr_1) e dello Stage 2 (sr_2)
+# È comune assegnare un peso maggiore all'output finale (sr_2).
 
-# ... (all'interno della funzione main() in train.py) ...
-
-# --- 2. Inizializzazione Modello e Loss ---
-# Configurazione del dispositivo
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-try:
-    # 1. Crea l'oggetto argomenti
-    args = Config() 
-    
-    # 2. Passa l'oggetto al modello
-    # Sostituito il nome del modello da ARSGN a Net come nel traceback
-    model = Net(args).to(device) 
-    
-except NameError:
-    print("ERRORE: La classe Net non è definita. Assicurati che 'model.py' esista nella cartella ARSGN.")
-    
-# --- Parametri di Training specificati ---
-BATCH_SIZE_PER_GPU = 16
-N_GPUS = 3  # Tre Nvidia TITAN GPU
-TOTAL_BATCH_SIZE = BATCH_SIZE_PER_GPU * N_GPUS # 16 * 3 = 48 (se si usa DataParallel)
-
-# Parametri dell'Ottimizzatore Adam
-INITIAL_LR = 1e-4
-BETA1 = 0.9
-BETA2 = 0.999
-EPSILON = 1e-8 # Corrisponde a eta = 1e-8
-
-# Schedulazione del Learning Rate
-LR_DECAY_EPOCHS = 500
-LR_DECAY_FACTOR = 10
-MAX_EPOCHS = 2000 # Assunzione di un numero massimo di epoche
-
-# --- Setup Ambiente ---
-print("Ambiente richiesto: Ubuntu 18.04, CUDA 10.2, CUDNN 7.5, 3x Nvidia TITAN GPUs.")
-
-# Configurazione del dispositivo
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-if torch.cuda.is_available() and torch.cuda.device_count() >= N_GPUS:
-    print(f"Trovate {torch.cuda.device_count()} GPU. Utilizzo {N_GPUS} per DataParallel.")
-elif torch.cuda.is_available():
-    print(f"ATTENZIONE: Trovate solo {torch.cuda.device_count()} GPU. Il setup originale ne prevedeva {N_GPUS}.")
-else:
-    print("ATTENZIONE: GPU non disponibile. Training su CPU.")
-
-
-# --- Funzione per la Schedulazione del Learning Rate ---
-def adjust_learning_rate(optimizer, epoch):
+def calculate_total_loss(sr_1, sr_2, hr_batch, criterion):
     """
-    Diminuisce il learning rate di un fattore 10 ogni 500 epoche.
+    Calcola la perdita combinata per il modello a due stadi.
+
+    Args:
+        sr_1 (Tensor): Output Super-Resolution dello Stage 1.
+        sr_2 (Tensor): Output Super-Resolution dello Stage 2 (Finale).
+        hr_batch (Tensor): Immagine High Resolution (Ground Truth).
+        criterion (Loss Function): Funzione di perdita (es. L1Loss).
+
+    Returns:
+        Tensor: La perdita totale combinata.
     """
-    lr = INITIAL_LR * (1.0 / LR_DECAY_FACTOR ** (epoch // LR_DECAY_EPOCHS))
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
-    return lr
+    # Esempio di peso: 40% sul primo stadio, 60% sul secondo (o 50/50)
+    WEIGHT_STAGE1 = 0.4
+    WEIGHT_STAGE2 = 0.6 
+    
+    # 1. Perdita sullo Stage 1
+    loss_stage1 = criterion(sr_1, hr_batch)
+    
+    # 2. Perdita sullo Stage 2 (Output Finale)
+    loss_stage2 = criterion(sr_2, hr_batch)
+    
+    # 3. Perdita Totale Ponderata
+    total_loss = (WEIGHT_STAGE1 * loss_stage1) + (WEIGHT_STAGE2 * loss_stage2)
+    
+    return total_loss, loss_stage1.item(), loss_stage2.item()
 
 
-def main():
-    # --- 1. Preparazione Dataset ---
-    # Downsampling con funzione bicubic per creare immagini LR.
-    try:
-        train_dataset = SRDataset(
-            hr_dir='SR/ARSGN/datasets/test',
-            lr_downsampling_method='bicubic'
-        )
-    except NameError:
-        print("ERRORE: La classe SRDataset non è definita. Assicurati che 'dataset.py' esista nella cartella ARSGN.")
-        return
-
-    train_loader = DataLoader(
-        dataset=train_dataset,
-        batch_size=TOTAL_BATCH_SIZE,
-        shuffle=True,
-        num_workers=8 # Imposta in base alle risorse del tuo sistema
+def train():
+    print(f"--- Avvio Training su {config.DEVICE} ---")
+    
+    # 1. INIZIALIZZAZIONE
+    # ----------------------------------------------------------------------
+    device = torch.device(config.DEVICE)
+    
+    # Crea la directory per salvare i pesi se non esiste
+    os.makedirs(config.WEIGHTS_DIR, exist_ok=True)
+    
+    # Simula l'oggetto args richiesto dalla classe Net
+    class Args: pass 
+    args = Args()
+    
+    # 2. MODELLO, DATI, LOSS E OTTIMIZZATORE
+    # ----------------------------------------------------------------------
+    model = Net(args).to(device)
+    
+    # Caricamento Dati
+    train_loader = get_dataloaders(
+        lr_dir=config.DATA_DIR_LR, 
+        hr_dir=config.DATA_DIR_HR, 
+        batch_size=config.BATCH_SIZE
+    )
+    
+    # Funzione di Perdita (Mean Absolute Error o L1 Loss è comune in SR)
+    criterion = nn.L1Loss() 
+    
+    # Ottimizzatore Adam con i parametri specificati
+    optimizer = torch.optim.Adam(
+        model.parameters(), 
+        lr=config.LEARNING_RATE,
+        betas=(config.ADAM_BETA1, config.ADAM_BETA2),
+        eps=config.ADAM_EPSILON
+    )
+    
+    # Scheduler del Learning Rate (Decadimento)
+    # Il testo indica: "diminuisce di un fattore di 10 per ogni 500 epoche"
+    scheduler = StepLR(
+        optimizer, 
+        step_size=config.LR_DECAY_STEP, # 500
+        gamma=config.LR_DECAY_FACTOR    # 0.1 (1/10)
     )
 
-    # --- 2. Inizializzazione Modello e Loss ---
-    try:
-        # Crea un'istanza del modello ARSGN
-        model = Net(args).to(device) # <<<<<< AGGIORNATO: ARSGN
-    except NameError:
-        print("ERRORE: La classe ARSGN non è definita. Assicurati che 'model.py' esista nella cartella ARSGN.")
-        return
+    # 3. CICLO DI ADDESTRAMENTO
+    # ----------------------------------------------------------------------
+    for epoch in range(config.NUM_EPOCHS):
+        model.train()  # Imposta il modello in modalità training
+        epoch_total_loss = 0
+        epoch_loss1 = 0
+        epoch_loss2 = 0
+        
+        for batch_idx, (lr_batch, hr_batch) in enumerate(train_loader):
+            # A. Sposta i dati sul dispositivo (GPU/CPU)
+            lr_batch = lr_batch.to(device) 
+            hr_batch = hr_batch.to(device) 
 
-    # Se si utilizzano più GPU, avvolgi il modello in DataParallel
-    if torch.cuda.device_count() > 1 and N_GPUS > 1:
-        model = nn.DataParallel(model, device_ids=list(range(N_GPUS)))
+            # B. Zero i gradienti
+            optimizer.zero_grad() 
 
-    # Uso L1Loss (MAE) o L2Loss (MSE). Se il modello è G-N (Generative Network)
-    # in un GAN, potrebbe essere una combinazione di L1/L2 e Loss Avversariale.
-    # Per una sola subnetwork, L1 è comune.
-    criterion = nn.L1Loss().to(device)
+            # C. Forward Pass: l'output sono i due stadi (sr_1, sr_2)
+            sr_1, sr_2 = model(lr_batch) 
+            
+            # D. Calcola la Perdita Totale
+            total_loss, loss1, loss2 = calculate_total_loss(sr_1, sr_2, hr_batch, criterion)
+            
+            # E. Backward Pass
+            total_loss.backward()
 
-    # --- 3. Ottimizzatore ---
-    optimizer = optim.Adam(
-        model.parameters(),
-        lr=INITIAL_LR,
-        betas=(BETA1, BETA2),
-        eps=EPSILON
-    )
+            # F. Aggiorna i pesi del modello
+            optimizer.step() 
+            
+            # Statistiche
+            epoch_total_loss += total_loss.item()
+            epoch_loss1 += loss1
+            epoch_loss2 += loss2
+        
+        # 4. AGGIORNAMENTO SCHEDULER E LOG
+        # ----------------------------------------------------------------------
+        
+        # Aggiorna il learning rate (lo scheduler controlla il timing)
+        scheduler.step()
+        
+        # Calcola le perdite medie per l'epoca
+        num_batches = len(train_loader)
+        avg_total_loss = epoch_total_loss / num_batches
+        avg_loss1 = epoch_loss1 / num_batches
+        avg_loss2 = epoch_loss2 / num_batches
+        
+        current_lr = optimizer.param_groups[0]['lr']
+        
+        # Stampa i risultati dell'epoca
+        print(f"Epoch [{epoch+1}/{config.NUM_EPOCHS}] - LR: {current_lr:.6e} - "
+              f"Loss Tot: {avg_total_loss:.4f} (Stage 1: {avg_loss1:.4f}, Stage 2: {avg_loss2:.4f})")
+              
+        # 5. SALVATAGGIO MODELLO (Checkpoint)
+        # ----------------------------------------------------------------------
+        if (epoch + 1) % config.SAVE_FREQUENCY == 0:
+            save_path = os.path.join(config.WEIGHTS_DIR, f'model_epoch_{epoch+1}.pth')
+            torch.save(model.state_dict(), save_path)
+            print(f"Modello salvato in {save_path}")
 
-    # --- 4. Loop di Training ---
-    print("Inizio Training ARSGN...") # <<<<<< AGGIORNATO: ARSGN
-    for epoch in range(1, MAX_EPOCHS + 1):
-        # Aggiornamento del Learning Rate
-        current_lr = adjust_learning_rate(optimizer, epoch)
-        print(f"Epoca [{epoch}/{MAX_EPOCHS}], Learning Rate: {current_lr:.1e}")
+    print("--- Training Completato ---")
 
-        model.train()
-        for batch_idx, (lr_input, hr_target) in enumerate(train_loader):
-            # Sposta i dati sulla GPU
-            lr_input = lr_input.to(device)
-            hr_target = hr_target.to(device)
-
-            # Forward pass
-            sr_output = model(lr_input)
-
-            # Calcolo Loss
-            loss = criterion(sr_output, hr_target)
-
-            # Backward e Ottimizzazione
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-            if (batch_idx + 1) % 50 == 0:
-                print(f"  Batch [{batch_idx+1}/{len(train_loader)}], Loss: {loss.item():.4f}")
-
-        # Salvataggio Checkpoint (Esempio)
-        if epoch % 100 == 0:
-            save_path = f'./ARSGN_checkpoint_epoch_{epoch}.pth' # <<<<<< AGGIORNATO: ARSGN
-            print(f"Salvataggio checkpoint in {save_path}")
-            # Salva solo lo state_dict del modello non avvolto da DataParallel
-            state_dict = model.module.state_dict() if isinstance(model, nn.DataParallel) else model.state_dict()
-            torch.save(state_dict, save_path)
-
-    print("Training ARSGN terminato.") # <<<<<< AGGIORNATO: ARSGN
 
 if __name__ == '__main__':
-    main()
+    train()
