@@ -35,7 +35,7 @@ def test():
     # 1. INIZIALIZZAZIONE
     # ----------------------------------------------------------------------
     device = torch.device(config.DEVICE)
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    os.makedirs(config.OUTPUT_DIR, exist_ok=True)
     
     # Simula l'oggetto args
     class Args: pass 
@@ -47,11 +47,11 @@ def test():
     
     # Definisci il percorso del modello da caricare
     # DEVI CAMBIARE QUESTA VARIABILE per puntare al tuo modello addestrato
-    WEIGHTS_PATH = os.path.join(config.WEIGHTS_DIR, 'latest_model.pth') 
+    WEIGHTS_PATH = os.path.join(config.WEIGHTS_DIR, 'model_epoch_100.pth') 
     
     if not os.path.exists(WEIGHTS_PATH):
         print(f"ERRORE: Pesi del modello non trovati in {WEIGHTS_PATH}")
-        return
+        
         
     print(f"Caricamento pesi da: {WEIGHTS_PATH}")
     model.load_state_dict(torch.load(WEIGHTS_PATH, map_location=device))
@@ -61,8 +61,8 @@ def test():
     # ----------------------------------------------------------------------
     # Utilizziamo la stessa logica di dataset, ma non abbiamo bisogno di shuffle
     test_loader = get_dataloaders(
-        lr_dir=config.DATA_DIR_LR, 
-        hr_dir=config.DATA_DIR_HR, # Si usa hr_dir solo per ottenere il numero di file
+        lr_dir=config.DATA_DIR_TEST_LR, 
+        hr_dir=config.DATA_DIR_TEST_HR, # Si usa hr_dir solo per ottenere il numero di file
         batch_size=1, # Inferenza sempre con batch_size=1
         shuffle=False
     )
@@ -85,7 +85,7 @@ def test():
             # Ottieni il nome del file originale per il salvataggio
             # Nota: questo richiede che l'indice del dataset corrisponda ai percorsi originali
             original_filename = os.path.basename(test_loader.dataset.hr_paths[idx])
-            output_filename = os.path.join(OUTPUT_DIR, f"SR_{original_filename}")
+            output_filename = os.path.join(config.OUTPUT_DIR, f"SR_{original_filename}")
             
             save_image(sr_final, output_filename)
             

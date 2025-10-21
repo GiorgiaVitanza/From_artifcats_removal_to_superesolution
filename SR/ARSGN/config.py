@@ -10,13 +10,13 @@ import os
 import torch
 
 # Parametri di I/O
-DATA_DIR_LR = "SR/ARSGN/data/lr"
-DATA_DIR_HR = "SR/ARSGN/data/hr"
-WEIGHTS_DIR = "weights"
+DATA_DIR_LR = "SR/ARSGN/data/lrx64"
+DATA_DIR_HR = "SR/ARSGN/data/hr256"
+WEIGHTS_DIR = "SR\ARSGN\weights"
 SAVE_FREQUENCY = 10
 
 # Parametri di Training
-BATCH_SIZE = 16
+BATCH_SIZE = 5
 NUM_EPOCHS = 100
 LEARNING_RATE = 1e-4
 
@@ -37,3 +37,8 @@ LR_DECAY_FACTOR = 0.1
 
 # Device
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
+# Output test
+OUTPUT_DIR = "SR/ARSGN/SR_images"
+DATA_DIR_TEST_LR = "SR/ARSGN/data/lr_test_64"
+DATA_DIR_TEST_HR = "SR/ARSGN/data/hr_test"
