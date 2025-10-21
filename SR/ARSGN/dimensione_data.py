@@ -58,7 +58,7 @@ def get_image_dimensions_in_folder(folder_path):
 # IMPOSTAZIONI: MODIFICA QUESTO VALORE
 # =========================================================================
 # Inserisci il percorso della cartella contenente le tue immagini
-FOLDER_TO_CHECK = "SR\ARSGN\data\lr"
+FOLDER_TO_CHECK = "SR\ARSGN\data\hr"
 
 # Esecuzione della funzione
 if __name__ == "__main__":

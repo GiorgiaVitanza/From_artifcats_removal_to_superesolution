@@ -8,14 +8,14 @@ import torchvision.transforms.functional as TF # Per il ritaglio funzionale
 
 # --- CONFIGURAZIONE FISSA (da mantenere in config.py) ---
 # SCALE_FACTOR = 4 # Fattore di ingrandimento (es. 4x)
-# HR_PATCH_SIZE = 512 # Dimensione del ritaglio per l'immagine HR (deve essere multiplo di SCALE_FACTOR)
+# HR_PATCH_SIZE = 256 # Dimensione del ritaglio per l'immagine HR (deve essere multiplo di SCALE_FACTOR)
 # --------------------------------------------------------
 
 class SRDataset(Dataset):
     """
     Dataset personalizzato per la Super-Resolution con Ritaglio Casuale di Patch.
     """
-    def __init__(self, lr_dir, hr_dir, scale_factor=4, hr_patch_size=512):
+    def __init__(self, lr_dir, hr_dir, scale_factor=4, hr_patch_size=256):
         """
         Inizializza il dataset.
 
@@ -25,11 +25,11 @@ class SRDataset(Dataset):
             scale_factor (int): Il fattore di ingrandimento S.
             hr_patch_size (int): La dimensione del ritaglio quadrato per le immagini HR.
         """
-        self.lr_paths = sorted(glob.glob(os.path.join(lr_dir, '*.png')))
-        self.hr_paths = sorted(glob.glob(os.path.join(hr_dir, '*.png')))
+        self.lr_paths = sorted(glob.glob(os.path.join(lr_dir, '*.tif')))
+        self.hr_paths = sorted(glob.glob(os.path.join(hr_dir, '*.tif')))
         
         if not self.lr_paths or not self.hr_paths:
-            raise FileNotFoundError("Assicurati che le directory LR e HR contengano file PNG.")
+            raise FileNotFoundError("Assicurati che le directory LR e HR contengano file tif.")
         
         if len(self.lr_paths) != len(self.hr_paths):
             print("ATTENZIONE: Il numero di immagini LR e HR non corrisponde!")
@@ -59,7 +59,7 @@ class SRDataset(Dataset):
         
         # 2. Ottieni i parametri di ritaglio casuale per l'immagine HR
         # Le dimensioni delle immagini (es. 941x1372) vengono ritagliate qui.
-        i, j, h, w = transforms.RandomCrop.get_params(hr_img, output_size=(self.hr_patch_size, self.hr_patch_size))
+        """ i, j, h, w = transforms.RandomCrop.get_params(hr_img, output_size=(self.hr_patch_size, self.hr_patch_size))
         
         # 3. Applica il ritaglio alla patch HR
         hr_img_crop = TF.crop(hr_img, i, j, h, w)
@@ -69,11 +69,11 @@ class SRDataset(Dataset):
         i_lr, j_lr = i // self.scale_factor, j // self.scale_factor
         
         # Applica il ritaglio (se le patch LR sono già state pre-generate)
-        lr_img_crop = TF.crop(lr_img, i_lr, j_lr, self.lr_patch_size, self.lr_patch_size)
+        lr_img_crop = TF.crop(lr_img, i_lr, j_lr, self.lr_patch_size, self.lr_patch_size) """
 
         # 5. Trasforma in tensori
-        lr_tensor = self.to_tensor(lr_img_crop)
-        hr_tensor = self.to_tensor(hr_img_crop)
+        lr_tensor = self.to_tensor(lr_img)
+        hr_tensor = self.to_tensor(hr_img)
 
         # Verifica di sicurezza (le dimensioni H/W devono ora corrispondere)
         # Se lo script train.py fallisce ancora, è un problema qui o nel modello!
@@ -82,8 +82,8 @@ class SRDataset(Dataset):
 
         return lr_tensor, hr_tensor
 
-def get_dataloaders(lr_dir, hr_dir, batch_size, shuffle=True, num_workers=4, 
-                    scale_factor=4, hr_patch_size=512):
+def get_dataloaders(lr_dir, hr_dir, batch_size, shuffle=True, num_workers=0, 
+                    scale_factor=4, hr_patch_size=256):
     """
     Crea e restituisce il DataLoader per l'addestramento.
     """
