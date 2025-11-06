@@ -41,6 +41,6 @@ LR_DECAY_FACTOR = 0.1
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 # Output test
-OUTPUT_DIR = "SR/ARSGN/SR_images"
-DATA_DIR_TEST_LR = "SR/ARSGN/data/lr_test_64"
-DATA_DIR_TEST_HR = "SR/ARSGN/data/hr_test"
+OUTPUT_DIR = "C:/data_tif/SR_images"
+DATA_DIR_TEST_LR = "C:/data_tif/lr_test_64"
+DATA_DIR_TEST_HR = "C:/data_tif/hr_test"

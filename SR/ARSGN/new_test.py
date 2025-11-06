@@ -2,58 +2,93 @@ import os
 import torch
 import torch.nn as nn
 import numpy as np
-from astropy.io import fits
+# Rimosse astropy.io e le sue funzioni (fits)
 import sys
 import torch.nn.functional as F
+
+# Nuove importazioni necessarie per TIFF
+from skimage.io import imread, imsave 
+from skimage.util import img_as_float32 # Utile per standardizzare il caricamento
+# Importa la tua funzione di downsampling
 from utils.preprocessing import load_and_downsample_tif
 
 # Importa i moduli del tuo progetto
 import config
 from models.agsr import Net
-# Assicurati che load_fits_data sia disponibile nel tuo ambiente
-# Ho ri-implementato una versione semplificata per l'uso qui.
 
-# --- FUNZIONI DI UTILITÀ PER FITS ---
 
-def load_fits_data(file_path):
-    """Carica i dati FITS e restituisce un tensore (1, H, W) pronto per PyTorch."""
-    if not os.path.exists(file_path):
-        print(f"ERRORE: File non trovato al percorso: {file_path}")
-        return None
+# --- NUOVE FUNZIONI DI CARICAMENTO E SALVATAGGIO TIFF ---
+
+def load_tif_data(filepath):
+    """
+    Carica un file TIFF e lo converte in un tensore PyTorch (1, C, H, W).
+    Normalizza i dati a float32 e, se sono già a float, li assume normalizzati.
+    """
     try:
-        data = fits.getdata(file_path)
-        data = np.squeeze(data).astype(np.float32)
-        # Aggiungi una dimensione per il canale (C) e una per il batch (N) -> (1, 1, H, W)
-        tensor = torch.from_numpy(data).unsqueeze(0).unsqueeze(0)
-        return tensor
+        # Carica i dati e convertili in float32 standardizzato
+        # img_as_float32 scala i dati interi (es. uint16) nell'intervallo [0.0, 1.0]
+        # Se il tuo TIFF è già scientifico non normalizzato, potresti dover 
+        # rimuovere questa riga e usare solo .astype(np.float32) + normalizzazione manuale.
+        # Mantengo img_as_float32 come standard per le immagini.
+        img_np = img_as_float32(imread(filepath))
+        
+        if img_np.ndim == 2:
+            # Immagine in scala di grigi (H, W) -> (1, 1, H, W)
+            # Aggiunge dimensione Canale (1) e dimensione Batch (1)
+            img_tensor = torch.from_numpy(img_np[np.newaxis, np.newaxis, ...])
+        elif img_np.ndim == 3:
+            # Immagine a colori (H, W, C) -> (1, C, H, W)
+            # Trasposta per C al posto di H e W, poi aggiunge dimensione Batch (1)
+            img_tensor = torch.from_numpy(img_np).permute(2, 0, 1).unsqueeze(0)
+            
+        print(f"Dati TIFF caricati: {img_np.shape}. Tensore PyTorch: {img_tensor.shape}")
+        
+        # Sposta al device prima dell'inferenza
+        return img_tensor.to(config.DEVICE)
+        
     except Exception as e:
-        print(f"ERRORE durante la lettura del file FITS {file_path}: {e}")
+        print(f"ERRORE nel caricamento TIFF di {filepath}: {e}")
         return None
 
-def save_fits_image(tensor, original_fits_path, output_filename):
+
+def save_tif_image(data_tensor, output_filepath):
     """
-    Salva un tensore PyTorch (risultato SR) come nuovo file FITS.
-    (La tua implementazione originale è mantenuta, ma adattata per i tensori 4D)
-    """
-    # Sposta il tensore su CPU e convertilo in array NumPy float32
-    # Rimuovi le dimensioni B=1 e C=1, ottenendo (H, W)
-    numpy_data = tensor.cpu().squeeze().numpy()
+    Salva un tensore PyTorch (1, C, H, W) o (1, 1, H, W) come file TIFF.
     
-    if numpy_data.ndim != 2:
-        # Se i dati sono ancora 3D/4D, c'è un problema di shape
-        raise ValueError(f"Dati non 2D per il salvataggio FITS. Forma rilevata: {numpy_data.shape}")
-
+    Args:
+        data_tensor (torch.Tensor): Il tensore dell'immagine SR.
+        output_filepath (str): Il percorso dove salvare l'immagine.
+    """
     try:
-        with fits.open(original_fits_path) as hdul:
-            original_header = hdul[0].header
+        # 1. Sposta su CPU e converte in array NumPy
+        # Rimuove la dimensione Batch (0)
+        img_np = data_tensor.squeeze(0).cpu().numpy()
+        
+        # 2. Gestione dei canali
+        if img_np.ndim == 3:
+            # Immagine a colori (C, H, W) -> (H, W, C) per il salvataggio standard
+            img_np = img_np.transpose(1, 2, 0)
+        elif img_np.ndim == 2:
+            # Immagine in scala di grigi (H, W)
+            pass
+        
+        # 3. Gestione della gamma dinamica (CRITICA PER I FILE .TIF)
+        # Se il tuo modello SR produce output non normalizzati, devi scalare
+        # qui. Se invece l'output è normalizzato [0.0, 1.0], puoi lasciarlo float.
+        # ASSUMO che l'output SR sia normalizzato [0.0, 1.0]
+        
+        # Se vuoi salvarlo come 16-bit, de-normalizza:
+        # max_val_16bit = 65535.0
+        # img_np = (np.clip(img_np, 0.0, 1.0) * max_val_16bit).astype(np.uint16)
+        
+        # In questo caso, lo salviamo come float32 non normalizzato [0.0, 1.0] per preservare i valori
+        img_np = img_np.astype(np.float32)
+        
+        imsave(output_filepath, img_np)
+        
     except Exception as e:
-        original_header = fits.Header()
+        print(f"ERRORE nel salvataggio TIFF di {output_filepath}: {e}")
 
-    hdu = fits.PrimaryHDU(numpy_data, header=original_header)
-    hdu.header['SR_MODEL'] = ('ARSGN', 'Modello usato per la Super-Risoluzione')
-    hdu.header['SR_SCALE'] = (config.SCALE_FACTOR, 'Fattore di ingrandimento applicato')
-    hdu.header['COMMENT'] = 'Generated via Super-Resolution (ARSGN) from LR FITS data.'
-    hdu.writeto(output_filename, overwrite=True)
 
 
 # --- FUNZIONI DI INFERENZA CON TILING ---
@@ -139,11 +174,11 @@ def inferenza_con_tiling(model, lr_full_tensor, scale_factor, patch_size, device
     return sr_final.contiguous(), ar_patch
 
 
-# --- FUNZIONE PRINCIPALE DI TEST ---
+# --- FUNZIONE PRINCIPALE DI TEST (MODIFICATA) ---
 
 def test():
     """Esegue l'inferenza sull'immagine LR completa utilizzando il Tiling."""
-    print(f"--- Avvio Inferenza con Tiling su {config.DEVICE} per dati FITS ---")
+    print(f"--- Avvio Inferenza con Tiling su {config.DEVICE} per dati TIFF ---")
     
     # 1. INIZIALIZZAZIONE
     # ----------------------------------------------------------------------
@@ -152,18 +187,17 @@ def test():
     
     # Simula l'oggetto args (necessario per inizializzare il modello Net(args))
     class Args: pass 
-    args = Args()
+    # **NOTA:** Dovrai popolare `args` con i parametri reali del tuo modello
+    # (es. args.scale, args.n_resblocks, ecc.)
+    args = Args() 
     
     # Variabili di tiling
-    # Assumi che la dimensione del patch sia un parametro nel tuo config
-    # Se non specificato, usa un valore comune (es. 64)
-    PATCH_SIZE = config.HR_PATCH_SIZE # Dimensione del patch LR usata nell'addestramento
+    PATCH_SIZE = config.HR_PATCH_SIZE // config.SCALE_FACTOR 
+    # Ho corretto la logica: se HR_PATCH_SIZE è 256 e SCALE_FACTOR è 4, il patch LR è 64
     
     # 2. CARICAMENTO MODELLO
     # ----------------------------------------------------------------------
-    # Assicurati che il modello Net possa essere inizializzato correttamente con 'args'
     model = Net(args).to(device)
-    
     WEIGHTS_PATH = os.path.join(config.WEIGHTS_DIR, 'model_epoch_100.pth') 
     
     if not os.path.exists(WEIGHTS_PATH):
@@ -175,8 +209,8 @@ def test():
     
     # 3. CARICAMENTO ELENCO FILE DI TEST
     # ----------------------------------------------------------------------
-    # Utilizza os.listdir per ottenere l'elenco dei file FITS nella directory LR
-    lr_files = [f for f in os.listdir(config.DATA_DIR_TEST_LR) if f.endswith('.fits')]
+    # Utilizza os.listdir per ottenere l'elenco dei file TIFF nella directory LR
+    lr_files = [f for f in os.listdir(config.DATA_DIR_TEST_LR) if f.lower().endswith(('.tif', '.tiff'))]
     total_images = len(lr_files)
     
     # 4. CICLO DI INFERENZA IMMAGINE INTERA
@@ -187,11 +221,11 @@ def test():
             
             print(f"\n--- Elaborazione {filename} ({idx + 1}/{total_images}) ---")
             
-            # 4a. Carica l'immagine LR intera (risultato: 1, 1, H, W tensor)
-            lr_full_tensor = load_fits_data(original_lr_path)
+            # 4a. Carica l'immagine LR intera (RISULTATO: 1, C, H, W tensor)
+            lr_full_tensor = load_tif_data(original_lr_path)
             
             if lr_full_tensor is None:
-                continue # Passa al file successivo in caso di errore di caricamento
+                continue 
             
             # 4b. Esegui l'inferenza con Tiling
             sr_final_tensor, ar_tensor = inferenza_con_tiling(
@@ -206,25 +240,18 @@ def test():
             # --------------------------------------------------------------
             
             base_name, _ = os.path.splitext(filename)
-            output_filename = os.path.join(config.OUTPUT_DIR, f"SR_{base_name}_x{config.SCALE_FACTOR}.fits")
-            output_ar_filename = os.path.join(config.OUTPUT_DIR, f"AR_{base_name}_x{config.SCALE_FACTOR}.fits")
+            # Salva in formato TIFF
+            output_filename = os.path.join(config.OUTPUT_DIR, f"SR_{base_name}_x{config.SCALE_FACTOR}.tif")
+            output_ar_filename = os.path.join(config.OUTPUT_DIR, f"AR_{base_name}_x{config.SCALE_FACTOR}.tif")
             
-            save_fits_image(
-                sr_final_tensor, 
-                original_lr_path, # Usa il percorso LR per l'header
-                output_filename
-            )
-
-            save_fits_image(
-                ar_tensor, 
-                original_lr_path, 
-                output_ar_filename
-            )
+            save_tif_image(sr_final_tensor, output_filename)
+            save_tif_image(ar_tensor.squeeze(0), output_ar_filename) # AR ha bisogno di un squeeze se è solo un patch
             
             print(f"-> Salvato: {output_filename}", f"-> Salvato: {output_ar_filename}")
 
     print("--- Inferenza Completata ---")
 
 if __name__ == "__main__":
+    # Downsampling iniziale dei dati HR di test per ottenere i dati LR di test
     load_and_downsample_tif(config.DATA_DIR_TEST_HR, config.DATA_DIR_TEST_LR)
     test()
