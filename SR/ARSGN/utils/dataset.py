@@ -5,6 +5,7 @@ from torch.utils.data import Dataset, DataLoader
 from PIL import Image
 import torchvision.transforms as transforms
 import torchvision.transforms.functional as TF # Per il ritaglio funzionale
+import config
 
 # --- CONFIGURAZIONE FISSA (da mantenere in config.py) ---
 # SCALE_FACTOR = 4 # Fattore di ingrandimento (es. 4x)
@@ -15,7 +16,7 @@ class SRDataset(Dataset):
     """
     Dataset personalizzato per la Super-Resolution con Ritaglio Casuale di Patch.
     """
-    def __init__(self, lr_dir, hr_dir, scale_factor=4, hr_patch_size=256):
+    def __init__(self, lr_dir, hr_dir, scale_factor=config.SCALE_FACTOR, hr_patch_size=config.HR_PATCH_SIZE):
         """
         Inizializza il dataset.
 
@@ -82,8 +83,8 @@ class SRDataset(Dataset):
 
         return lr_tensor, hr_tensor
 
-def get_dataloaders(lr_dir, hr_dir, batch_size, shuffle=True, num_workers=0, 
-                    scale_factor=4, hr_patch_size=256):
+def get_dataloaders(lr_dir, hr_dir, batch_size = config.BATCH_SIZE, shuffle=True, num_workers=0, 
+                    scale_factor=config.SCALE_FACTOR, hr_patch_size=config.HR_PATCH_SIZE):
     """
     Crea e restituisce il DataLoader per l'addestramento.
     """
