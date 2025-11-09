@@ -1,1 +1,5 @@
 data
+weights_new/
+weights/
+weights_new_lambda10/
+weights_fulldata/
