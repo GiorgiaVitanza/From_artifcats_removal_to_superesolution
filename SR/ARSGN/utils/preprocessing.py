@@ -16,6 +16,16 @@ if percorso_arsgn not in sys.path:
 # --- Fine del codice di aggiunta percorso ---
 import config
 
+# Aggiungi questa funzione helper per allineare le dimensioni
+def get_aligned_shape(H, W, S):
+    """Calcola le dimensioni allineate (multiplo di S) più vicine."""
+    aligned_H = H - (H % S) # H % S è il resto, sottralo
+    aligned_W = W - (W % S)
+    return aligned_H, aligned_W
+
+
+
+
 
 def load_and_downsample_tif(input_dir=config.DATA_DIR_HR, output_dir=config.DATA_DIR_LR):
     """
@@ -43,25 +53,37 @@ def load_and_downsample_tif(input_dir=config.DATA_DIR_HR, output_dir=config.DATA
                 # *** Carica il file TIFF con imread ***
                 hr_data = imread(hr_path).astype(np.float32)
                 print(f"Forma dati HR caricati: {hr_data.shape}")
-
-                # Gestisce array con più dimensioni (es. (H, W, Canali) o (1, H, W))
-                # Se è un'immagine a colori o ha una dimensione extra, assicurati di downsamplare solo H e W.
+                # Allinea le dimensioni HR al multiplo di S
                 if hr_data.ndim == 3:
-                    # Rileva se il canale è la prima o l'ultima dimensione
-                    # Si presume (H, W, C) o (C, H, W). Assumiamo (H, W, C) per semplicità
                     H, W, C = hr_data.shape
-                    new_H, new_W = H // S, W // S
+                    # 1. Calcola la dimensione HR allineata
+                    aligned_H, aligned_W = get_aligned_shape(H, W, S)
+                    
+                    # 2. Ritaglia i dati HR
+                    # Se H o W non sono multipli di S, questo ritaglia i bordi
+                    hr_data_aligned = hr_data[:aligned_H, :aligned_W, :] 
+                    
+                    # 3. Calcola la nuova dimensione LR
+                    new_H, new_W = aligned_H // S, aligned_W // S
                     new_shape = (new_H, new_W, C)
+                    
                 elif hr_data.ndim == 2:
                     H, W = hr_data.shape
-                    new_H, new_W = H // S, W // S
+                    # 1. Calcola la dimensione HR allineata
+                    aligned_H, aligned_W = get_aligned_shape(H, W, S)
+                    
+                    # 2. Ritaglia i dati HR
+                    hr_data_aligned = hr_data[:aligned_H, :aligned_W]
+                    
+                    # 3. Calcola la nuova dimensione LR
+                    new_H, new_W = aligned_H // S, aligned_W // S
                     new_shape = (new_H, new_W)
-                else:
-                    print(f"AVVISO: Immagine con dimensione non gestita ({hr_data.ndim}). Ignoro.")
-                    continue
-
+                    
+                else:        
+                    print(f"AVVISO: Immagine con dimensione non gestita ({hr_data_aligned.ndim}). Ignoro.")
+                    continue        
                 # Pulisci NaN (se presenti, anche se meno comuni in immagini non FITS)
-                new_data = np.nan_to_num(hr_data, nan=0.0)
+                new_data = np.nan_to_num(hr_data_aligned, nan=0.0)
                 print(f"Forma dati da downsampling: {new_data.shape}")
                 # Esegui il downscaling (interpolazione bilineare/bicubica)
                 # L'ordine=3 corrisponde all'interpolazione bicubica
@@ -80,24 +102,21 @@ def load_and_downsample_tif(input_dir=config.DATA_DIR_HR, output_dir=config.DATA
                 # 1. Normalizza i dati (Scalatura tra 0.0 e 1.0)
                 # Trova il massimo valore di pixel nel dataset originale (o usa un valore noto, es. 65535)
                 # **ATTENZIONE: Se hai già dati normalizzati (0.0-1.0), salta questa riga!**
-                max_val = np.max(hr_data) # O np.max(lr_data) - usa il massimo dell'HR per coerenza
+                max_val = np.max(hr_data_aligned) # O np.max(lr_data) - usa il massimo dell'HR per coerenza
                 lr_data_normalized = lr_data / max_val
                 # La normalizzazione è critica!
                 print(f"Valori LR normalizzati (min/max): {np.min(lr_data_normalized):.4f} / {np.max(lr_data_normalized):.4f}")
 
 
-                # 2. Converte in un tipo di intero standard (es. 16-bit)
-                # Questo moltiplica l'array normalizzato per il massimo valore del tipo intero (es. 65535 per uint16)
-                # e lo converte in uint16.
-                # Scegli uint16 se i dati HR originali erano a 16 bit, altrimenti usa uint8 (max 255)
-                # In molti casi, le immagini scientifiche sono 16-bit.
-                lr_data_int = (lr_data_normalized * 65535).astype(np.uint16)
+                # 2. Converte in un tipo di intero standard uint8 (max 255)
+           
+                lr_data_int = (lr_data_normalized * max_val).astype(np.uint8)
                 
 
                 # *** Salva il nuovo file TIFF con imsave ***
                 # Salva l'array di interi invece del float32 non normalizzato
                 imsave(lr_path, lr_data_int)
-                print(f"Creato LR: {lr_data_int.shape} (dtype: {lr_data_int.dtype}) per HR: {hr_data.shape}. Salvato in {lr_path}")
+                print(f"Creato LR: {lr_data_int.shape} (dtype: {lr_data_int.dtype}) per HR: {hr_data_aligned.shape}. Salvato in {lr_path}")
 
             except Exception as e:
                 print(f"ERRORE nell'elaborazione del file {filename}: {e}")
