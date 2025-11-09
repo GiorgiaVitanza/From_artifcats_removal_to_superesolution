@@ -2,7 +2,8 @@ import os
 import glob
 import torch
 from torch.utils.data import Dataset, DataLoader
-from PIL import Image
+from skimage.io import imread
+import numpy as np
 import torchvision.transforms as transforms
 import torchvision.transforms.functional as TF # Per il ritaglio funzionale
 import config
@@ -16,6 +17,7 @@ class SRDataset(Dataset):
     """
     Dataset personalizzato per la Super-Resolution con Ritaglio Casuale di Patch.
     """
+    
     def __init__(self, lr_dir, hr_dir, scale_factor=config.SCALE_FACTOR, hr_patch_size=config.HR_PATCH_SIZE):
         """
         Inizializza il dataset.
@@ -50,38 +52,52 @@ class SRDataset(Dataset):
         """Restituisce il numero totale di campioni nel dataset."""
         return len(self.lr_paths)
 
+
     def __getitem__(self, idx):
-        """
-        Carica, ritaglia e preprocessa un singolo campione (coppia LR, HR).
-        """
-        # 1. Carica le immagini
-        hr_img = Image.open(self.hr_paths[idx]).convert("RGB")
-        lr_img = Image.open(self.lr_paths[idx]).convert("RGB")
+        # 1. Carica le immagini HR e LR come NumPy float32
+        # Usiamo imread (da skimage) perché gestisce meglio i TIFF float32 rispetto a PIL
+        hr_img_np = imread(self.hr_paths[idx]).astype(np.float32)
+        lr_img_np = imread(self.lr_paths[idx]).astype(np.float32)
         
-        # 2. Ottieni i parametri di ritaglio casuale per l'immagine HR
-        # Le dimensioni delle immagini (es. 941x1372) vengono ritagliate qui.
-        i, j, h, w = transforms.RandomCrop.get_params(hr_img, output_size=(self.hr_patch_size, self.hr_patch_size))
-        
-        # 3. Applica il ritaglio alla patch HR
-        hr_img_crop = TF.crop(hr_img, i, j, h, w)
-        
-        # 4. Applica il ritaglio alla patch LR
-        # Le coordinate devono essere scalate: i_lr = i / S, j_lr = j / S
-        i_lr, j_lr = i // self.scale_factor, j // self.scale_factor
-        
-        # Applica il ritaglio (se le patch LR sono già state pre-generate)
-        lr_img_crop = TF.crop(lr_img, i_lr, j_lr, self.lr_patch_size, self.lr_patch_size) 
- 
-        # 5. Trasforma in tensori
-        lr_tensor = self.to_tensor(lr_img_crop)
-        hr_tensor = self.to_tensor(hr_img_crop)
+        # Subito dopo: hr_img_np = imread(self.hr_paths[idx]).astype(np.float32)
+        print(f"DEBUG: Max value of HR image loaded: {np.max(hr_img_np)}")
+        print(f"DEBUG: Min value of HR image loaded: {np.min(hr_img_np)}")
+        # Dovresti vedere un max di circa 184.0, non 1.0!
 
-        # Verifica di sicurezza (le dimensioni H/W devono ora corrispondere)
-        # Se lo script train.py fallisce ancora, è un problema qui o nel modello!
-        # if hr_tensor.shape[1] != self.hr_patch_size or lr_tensor.shape[1] != self.lr_patch_size:
-        #    raise RuntimeError("Dimensioni della patch non corrette dopo il ritaglio.")
+        # 2. Converte in tensori PyTorch (H, W, C) -> (C, H, W)
+        hr_tensor = torch.from_numpy(hr_img_np).permute(2, 0, 1) 
+        lr_tensor = torch.from_numpy(lr_img_np).permute(2, 0, 1)
 
-        return lr_tensor, hr_tensor
+        # 3. Trova il massimo per la normalizzazione
+        # Usiamo max() qui, ma in un training reale è meglio usare un valore fisso (es. 255 o 65535) 
+        # se il range è noto, altrimenti il batch sarà non uniformemente normalizzato.
+        max_val_hr = hr_tensor.max().item()
+        if max_val_hr < 1e-4: max_val_hr = 1.0 
+
+        # 4. **NORMALIZZAZIONE ESPLICITA**
+        lr_tensor_norm = lr_tensor / max_val_hr
+        hr_tensor_norm = hr_tensor / max_val_hr
+        
+        # 5. Esegui il Cropping Casuale (come hai fatto prima) sui tensori normalizzati
+        # Nota: transforms.RandomCrop.get_params richiede la dimensione H e W
+        H, W = hr_tensor_norm.shape[1:] 
+        
+        # Calcolo casuale (assicurati che sia entro i limiti)
+        i = torch.randint(0, H - self.hr_patch_size + 1, (1,)).item()
+        j = torch.randint(0, W - self.hr_patch_size + 1, (1,)).item()
+        
+        # Applicazione del Cropping
+        lr_patch = lr_tensor_norm[:, 
+                                i // self.scale_factor : i // self.scale_factor + self.lr_patch_size, 
+                                j // self.scale_factor : j // self.scale_factor + self.lr_patch_size]
+                                
+        hr_patch = hr_tensor_norm[:, i : i + self.hr_patch_size, j : j + self.hr_patch_size]
+        
+        # Verifica finale (DEBUG)
+        print(f"Patch HR shape: {hr_patch.shape}, Patch LR shape: {lr_patch.shape}")
+        
+
+        return lr_patch, hr_patch # Ritorna le patch normalizzate e ritagliate
 
 def get_dataloaders(lr_dir, hr_dir, batch_size = config.BATCH_SIZE, shuffle=True, num_workers=0, 
                     scale_factor=config.SCALE_FACTOR, hr_patch_size=config.HR_PATCH_SIZE):

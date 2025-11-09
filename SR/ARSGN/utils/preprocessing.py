@@ -51,8 +51,8 @@ def load_and_downsample_tif(input_dir=config.DATA_DIR_HR, output_dir=config.DATA
 
             try:
                 # *** Carica il file TIFF con imread ***
-                hr_data = imread(hr_path).astype(np.float32)
-                print(f"Forma dati HR caricati: {hr_data.shape}")
+                hr_data = imread(hr_path)
+                print(f"Forma dati HR caricati: {hr_data.shape} (dtype: {hr_data.dtype})")
                 # Allinea le dimensioni HR al multiplo di S
                 if hr_data.ndim == 3:
                     H, W, C = hr_data.shape
@@ -94,29 +94,15 @@ def load_and_downsample_tif(input_dir=config.DATA_DIR_HR, output_dir=config.DATA
                     mode='reflect',
                     anti_aliasing=True,
                     preserve_range=True # Importante per mantenere i valori originali dei pixel
-                ).astype(np.float32)
+                ).astype(np.uint8)
 
                 print(f"Forma dati LR generati: {lr_data.shape}")
 
 
-                # 1. Normalizza i dati (Scalatura tra 0.0 e 1.0)
-                # Trova il massimo valore di pixel nel dataset originale (o usa un valore noto, es. 65535)
-                # **ATTENZIONE: Se hai già dati normalizzati (0.0-1.0), salta questa riga!**
-                max_val = np.max(hr_data_aligned) # O np.max(lr_data) - usa il massimo dell'HR per coerenza
-                lr_data_normalized = lr_data / max_val
-                # La normalizzazione è critica!
-                print(f"Valori LR normalizzati (min/max): {np.min(lr_data_normalized):.4f} / {np.max(lr_data_normalized):.4f}")
-
-
-                # 2. Converte in un tipo di intero standard uint8 (max 255)
-           
-                lr_data_int = (lr_data_normalized * max_val).astype(np.uint8)
-                
-
+            
                 # *** Salva il nuovo file TIFF con imsave ***
-                # Salva l'array di interi invece del float32 non normalizzato
-                imsave(lr_path, lr_data_int)
-                print(f"Creato LR: {lr_data_int.shape} (dtype: {lr_data_int.dtype}) per HR: {hr_data_aligned.shape}. Salvato in {lr_path}")
+                imsave(lr_path, lr_data)
+                print(f"Creato LR: {lr_data.shape} (dtype: {lr_data.dtype}) per HR: {hr_data_aligned.shape}. Salvato in {lr_path}")
 
             except Exception as e:
                 print(f"ERRORE nell'elaborazione del file {filename}: {e}")
