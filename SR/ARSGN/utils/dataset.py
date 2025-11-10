@@ -58,11 +58,6 @@ class SRDataset(Dataset):
         # Usiamo imread (da skimage) perché gestisce meglio i TIFF float32 rispetto a PIL
         hr_img_np = imread(self.hr_paths[idx]).astype(np.float32)
         lr_img_np = imread(self.lr_paths[idx]).astype(np.float32)
-        
-        # Subito dopo: hr_img_np = imread(self.hr_paths[idx]).astype(np.float32)
-        print(f"DEBUG: Max value of HR image loaded: {np.max(hr_img_np)}")
-        print(f"DEBUG: Min value of HR image loaded: {np.min(hr_img_np)}")
-        # Dovresti vedere un max di circa 184.0, non 1.0!
 
         # 2. Converte in tensori PyTorch (H, W, C) -> (C, H, W)
         hr_tensor = torch.from_numpy(hr_img_np).permute(2, 0, 1) 
@@ -71,30 +66,27 @@ class SRDataset(Dataset):
         # 3. Trova il massimo per la normalizzazione
         # Usiamo max() qui, ma in un training reale è meglio usare un valore fisso (es. 255 o 65535) 
         # se il range è noto, altrimenti il batch sarà non uniformemente normalizzato.
-        max_val_hr = hr_tensor.max().item()
-        if max_val_hr < 1e-4: max_val_hr = 1.0 
-
-        # 4. **NORMALIZZAZIONE ESPLICITA**
-        lr_tensor_norm = lr_tensor / max_val_hr
-        hr_tensor_norm = hr_tensor / max_val_hr
+        if config.NORMALIZE:
+            max_val_hr = hr_tensor.max().item()
+            if max_val_hr < 1e-4: max_val_hr = 1.0 
+            lr_tensor = lr_tensor / max_val_hr
+            hr_tensor = hr_tensor / max_val_hr
+        
         
         # 5. Esegui il Cropping Casuale (come hai fatto prima) sui tensori normalizzati
         # Nota: transforms.RandomCrop.get_params richiede la dimensione H e W
-        H, W = hr_tensor_norm.shape[1:] 
+        H, W = hr_tensor.shape[1:] 
         
         # Calcolo casuale (assicurati che sia entro i limiti)
         i = torch.randint(0, H - self.hr_patch_size + 1, (1,)).item()
         j = torch.randint(0, W - self.hr_patch_size + 1, (1,)).item()
         
         # Applicazione del Cropping
-        lr_patch = lr_tensor_norm[:, 
+        lr_patch = lr_tensor[:, 
                                 i // self.scale_factor : i // self.scale_factor + self.lr_patch_size, 
                                 j // self.scale_factor : j // self.scale_factor + self.lr_patch_size]
                                 
-        hr_patch = hr_tensor_norm[:, i : i + self.hr_patch_size, j : j + self.hr_patch_size]
-        
-        # Verifica finale (DEBUG)
-        print(f"Patch HR shape: {hr_patch.shape}, Patch LR shape: {lr_patch.shape}")
+        hr_patch = hr_tensor[:, i : i + self.hr_patch_size, j : j + self.hr_patch_size]
         
 
         return lr_patch, hr_patch # Ritorna le patch normalizzate e ritagliate
