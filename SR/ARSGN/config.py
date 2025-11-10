@@ -12,11 +12,11 @@ import torch
 # Parametri di I/O
 DATA_DIR_LR = "C:/Dati_UCMerced_LandUse/lr_train"
 DATA_DIR_HR = "C:/Dati_UCMerced_LandUse/hr_train"
-WEIGHTS_DIR = "SR\ARSGN\weights_fulldata"
+WEIGHTS_DIR = "SR\ARSGN\weights_fulldata_norm_false"
 SAVE_FREQUENCY = 50
 
 # Normalizzazione
-NORMALIZE = False
+NORMALIZE = 'MinMax'
 
 # Parametri di Training
 BATCH_SIZE = 16
@@ -44,6 +44,6 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 # Output test
 HR_PATCH_SIZE = 64
-OUTPUT_DIR = "C:/Dati_UCMerced_LandUse/SR_images"
+OUTPUT_DIR = "C:/Dati_UCMerced_LandUse/SR_images_norm_false"
 DATA_DIR_TEST_LR = "C:/Dati_UCMerced_LandUse/lr_test_64"
 DATA_DIR_TEST_HR = "C:/Dati_UCMerced_LandUse/hr_test"

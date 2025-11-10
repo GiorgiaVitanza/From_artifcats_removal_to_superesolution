@@ -63,14 +63,25 @@ class SRDataset(Dataset):
         hr_tensor = torch.from_numpy(hr_img_np).permute(2, 0, 1) 
         lr_tensor = torch.from_numpy(lr_img_np).permute(2, 0, 1)
 
-        # 3. Trova il massimo per la normalizzazione
-        # Usiamo max() qui, ma in un training reale è meglio usare un valore fisso (es. 255 o 65535) 
-        # se il range è noto, altrimenti il batch sarà non uniformemente normalizzato.
-        if config.NORMALIZE:
+        # 3. Normalizza le immagini se richiesto
+        if config.NORMALIZE == 'MinMax':
+            # Normalizzazione Min-Max
             max_val_hr = hr_tensor.max().item()
-            if max_val_hr < 1e-4: max_val_hr = 1.0 
-            lr_tensor = lr_tensor / max_val_hr
-            hr_tensor = hr_tensor / max_val_hr
+            min_val_hr = hr_tensor.min().item()
+            max_val_lr = lr_tensor.max().item()
+            min_val_lr = lr_tensor.min().item()
+            hr_tensor = (hr_tensor - min_val_hr) / (max_val_hr - min_val_hr)
+            lr_tensor = (lr_tensor - min_val_lr) / (max_val_lr - min_val_lr)
+        elif config.NORMALIZE == 'Standard':
+            # Normalizzazione Standard (Z-score)
+            mean_hr = hr_tensor.mean().item()
+            std_hr = hr_tensor.std().item()
+            mean_lr = lr_tensor.mean().item()
+            std_lr = lr_tensor.std().item()
+            hr_tensor = (hr_tensor - mean_hr) / std_hr
+            lr_tensor = (lr_tensor - mean_lr) / std_lr
+          
+            
         
         
         # 5. Esegui il Cropping Casuale (come hai fatto prima) sui tensori normalizzati
