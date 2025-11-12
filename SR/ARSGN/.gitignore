@@ -3,3 +3,5 @@ weights_new/
 weights/
 weights_new_lambda10/
 weights_fulldata/
+weights_fulldata_norm_standard/
+weights_fulldata_norm_minmax/

@@ -50,44 +50,49 @@ def load_tif_data(filepath):
         print(f"ERRORE nel caricamento TIFF di {filepath}: {e}")
         return None
 
-
-def save_tif_image(data_tensor, output_filepath):
+def save_tif_image(tensor_float, path, original_dtype_max=255.0):
     """
-    Salva un tensore PyTorch (1, C, H, W) o (1, 1, H, W) come file TIFF.
+    De-normalizza, clippa e converte un tensore float32 nel formato uint8 
+    adatto per la visualizzazione e il salvataggio in TIFF.
     
     Args:
-        data_tensor (torch.Tensor): Il tensore dell'immagine SR.
-        output_filepath (str): Il percorso dove salvare l'immagine.
+        tensor_float (torch.Tensor): Il tensore dell'immagine (C, H, W) in float32.
+        path (str): Il percorso di salvataggio del file.
+        original_dtype_max (float): Il valore massimo del dtype originale (es. 255.0 per uint8).
     """
     try:
-        # 1. Sposta su CPU e converte in array NumPy
-        # Rimuove la dimensione Batch (0)
-        img_np = data_tensor.squeeze(0).cpu().numpy()
+        # 1. Riporta all'intervallo 0-255 (Assumendo normalizzazione 0-1)
+        if config.NORMALIZE == 'MinMax':
+            # Esempio per Normalizzazione Min-Max (0-1)
+            original_dtype_min = 0.0
+            tensor_denormalized = tensor_float * (original_dtype_max - original_dtype_min) + original_dtype_min 
+        elif config.NORMALIZE == 'Standard':
+            mean = tensor_float.mean().item()
+            std = tensor_float.std().item()
+            tensor_denormalized = tensor_float * std + mean
         
-        # 2. Gestione dei canali
+        # 2. Converte da PyTorch a NumPy e Permuta i canali (C, H, W) -> (H, W, C)
+        # Assumiamo che i tensori in input siano già sul dispositivo corretto
+        img_np = tensor_denormalized.squeeze(0).cpu().numpy()
+        
+        # Spostiamo l'asse dei canali per l'uso di skimage.imsave
         if img_np.ndim == 3:
-            # Immagine a colori (C, H, W) -> (H, W, C) per il salvataggio standard
-            img_np = img_np.transpose(1, 2, 0)
-        elif img_np.ndim == 2:
-            # Immagine in scala di grigi (H, W)
-            pass
+            # Se è un'immagine a colori (C, H, W) -> (H, W, C)
+            img_np = np.transpose(img_np, (1, 2, 0)) 
         
-        # 3. Gestione della gamma dinamica (CRITICA PER I FILE .TIF)
-        # Se il tuo modello SR produce output non normalizzati, devi scalare
-        # qui. Se invece l'output è normalizzato [0.0, 1.0], puoi lasciarlo float.
-        # ASSUMO che l'output SR sia normalizzato [0.0, 1.0]
+        # 3. Clipping e Casting a uint8
+        # Clipping: Assicura che i valori siano nell'intervallo [0, 255]
+        img_np = np.clip(img_np, 0, original_dtype_max)
         
-        # Se vuoi salvarlo come 16-bit, de-normalizza:
-        # max_val_16bit = 65535.0
-        # img_np = (np.clip(img_np, 0.0, 1.0) * max_val_16bit).astype(np.uint16)
-        
-        # In questo caso, lo salviamo come float32 non normalizzato [0.0, 1.0] per preservare i valori
-        img_np = img_np.astype(np.float32)
-        
-        imsave(output_filepath, img_np)
-        
+        # Casting: Converte in intero senza segno a 8 bit
+        img_uint8 = img_np.astype(np.uint8)
+
+        # 4. Salvataggio
+        imsave(path, img_uint8)
+        print(f"Salvato come uint8: {path}")
+                
     except Exception as e:
-        print(f"ERRORE nel salvataggio TIFF di {output_filepath}: {e}")
+        print(f"ERRORE nel salvataggio TIFF di {path}: {e}")
 
 
 
@@ -154,8 +159,6 @@ def inferenza_con_tiling(model, lr_full_tensor, scale_factor, patch_size, device
             # Se il tuo modello restituisce (residual, sr_final) come nell'esempio, usa:
             ar_patch, sr_patch = model(lr_patch)
             
-            # sr_patch = model(lr_patch)
-            
             # 2c. Ricostruisci l'immagine SR
             SR_i = i * scale_factor
             SR_j = j * scale_factor
@@ -191,9 +194,6 @@ def test():
     # (es. args.scale, args.n_resblocks, ecc.)
     args = Args() 
     
-    # Variabili di tiling
-    PATCH_SIZE = config.HR_PATCH_SIZE // config.SCALE_FACTOR 
-    # Ho corretto la logica: se HR_PATCH_SIZE è 256 e SCALE_FACTOR è 4, il patch LR è 64
     
     # 2. CARICAMENTO MODELLO
     # ----------------------------------------------------------------------
@@ -232,7 +232,7 @@ def test():
                 model, 
                 lr_full_tensor, 
                 config.SCALE_FACTOR, 
-                PATCH_SIZE, 
+                config.HR_PATCH_SIZE, 
                 device
             )
             

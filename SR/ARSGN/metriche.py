@@ -52,8 +52,8 @@ def calculate_psnr(img1, img2):
     (Funzione lasciata invariata, PSNR si basa su MSE che è indipendente dal formato).
     """
     # Converti le immagini in float per i calcoli
-    img1 = img1.astype(np.float64)
-    img2 = img2.astype(np.float64)
+    img1 = img1.astype(np.float32)
+    img2 = img2.astype(np.float32)
 
     # Calcola il Mean Squared Error (MSE)
     mse = np.mean((img1 - img2) ** 2)

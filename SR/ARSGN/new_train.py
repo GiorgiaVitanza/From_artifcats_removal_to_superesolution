@@ -213,8 +213,8 @@ def train():
         
         # Stampa i risultati dell'epoca con le 3 componenti di perdita
         print(f"Epoch [{epoch+1}/{config.NUM_EPOCHS}] - LR: {current_lr:.6e} - "
-              f"Loss TOT: {avg_total_loss:.4f} "
-              f"(L_art: {avg_L_art:.4f}, L_sr: {avg_L_sr:.4f}, L_ffl: {avg_L_ffl:.4f})")
+              f"Average Loss TOT: {avg_total_loss:.4f} on {num_batches} batches "
+              f"(Average L_art: {avg_L_art:.4f}, Average L_sr: {avg_L_sr:.4f}, Average L_ffl: {avg_L_ffl:.4f})")
               
         # 5. SALVATAGGIO MODELLO (Checkpoint)
         # ----------------------------------------------------------------------
@@ -231,7 +231,7 @@ if __name__ == '__main__':
     # Se i file esterni (config, Net, get_dataloaders_fits) non sono definiti, 
     # usa la configurazione simulata.
     try:
-        load_and_downsample_tif(input_dir=config.DATA_DIR_HR, output_dir=config.DATA_DIR_LR)
+        # load_and_downsample_tif(input_dir=config.DATA_DIR_HR, output_dir=config.DATA_DIR_LR)
         train()
     except NameError as e:
         print(f"Errore: {e}. Assicurati che 'config', 'Net', e 'get_dataloaders_fits' siano definiti.")

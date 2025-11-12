@@ -51,7 +51,7 @@ def load_and_downsample_tif(input_dir=config.DATA_DIR_HR, output_dir=config.DATA
 
             try:
                 # *** Carica il file TIFF con imread ***
-                hr_data = imread(hr_path)
+                hr_data = imread(hr_path).astype(np.float32)
                 print(f"Forma dati HR caricati: {hr_data.shape} (dtype: {hr_data.dtype})")
                 # Allinea le dimensioni HR al multiplo di S
                 if hr_data.ndim == 3:
@@ -94,15 +94,21 @@ def load_and_downsample_tif(input_dir=config.DATA_DIR_HR, output_dir=config.DATA
                     mode='reflect',
                     anti_aliasing=True,
                     preserve_range=True # Importante per mantenere i valori originali dei pixel
-                ).astype(np.uint8)
+                ).astype(np.float32)
 
                 print(f"Forma dati LR generati: {lr_data.shape}")
 
 
             
                 # *** Salva il nuovo file TIFF con imsave ***
-                imsave(lr_path, lr_data)
-                print(f"Creato LR: {lr_data.shape} (dtype: {lr_data.dtype}) per HR: {hr_data_aligned.shape}. Salvato in {lr_path}")
+                # converto i dati in unint8 per la visualizzazione
+                # 1. Clipa i valori per assicurare che non superino 255 (importante)
+                lr_clipped = np.clip(lr_data, 0, 255)
+
+                # 2. Converte in uint8
+                lr_data_vis = lr_clipped.astype(np.uint8)
+                imsave(lr_path, lr_data_vis)
+                print(f"LR file creato e salvato in {lr_path}")
 
             except Exception as e:
                 print(f"ERRORE nell'elaborazione del file {filename}: {e}")
